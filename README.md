@@ -1,66 +1,61 @@
-# UCM
+# Parallelizable Dense Labeling Framework for Very-High-Resolution Satellite Images
 
-This is a C++ implementation of the [UCM](https://www2.eecs.berkeley.edu/Research/Projects/CS/vision/grouping/papers/amfm_pami2010.pdf) algorithm. Note that it requires an Nvidia GPU.
+This is the implementation of the parallelizable semi-supervised dense labeling framework for Very-High-Resolution (VHR) Satellite Images. The main steps contain OWT-UCM superpixel segmentation and GLSVM semi-supervised classification as our [paper](https://www.cise.ufl.edu/~anand/pdf/IJBDI_anandlyx_webversion.pdf) describes. Only a limited number of expert-labeled points in terms of pixel coordinates are needed for the pixel-level labeling work on the whole image. A toy example of the parallel labeling pipeline is shown as below.
+
+![Framework Example](https://https://github.com/yanyp/UCM-MPI-GPU/master/FrameworkExample.png "Framework Example")
+
+The original [OWT-UCM](https://www2.eecs.berkeley.edu/Research/Projects/CS/vision/grouping/resources.html) algorithm is re-written in C++ and CUDA to support the parallelization operations. We refer to the UC Berkeley's image contour detection [paper](https://parlab.eecs.berkeley.edu/sites/all/parlab/files/iccv2009.pdf) and Bryan's [codes](https://github.com/bryancatanzaro/damascene) for the GPU acceleration. When NVIDIA GPUs are not available, we use the [Spectra](https://spectralib.org/) C++ library to solve the large-scale eigenvalue problem of the *sPb* computation. Note that our codes are still under revision based on Google C++ style [guide](https://google.github.io/styleguide/cppguide.html).
 
 ## Compilation
 
-For it to run, you need CMake (>= 2.8), GCC (>= 4.x), MPICH (= 3.x), OpenCV (= 2.x), [CUDA](https://developer.nvidia.com/cuda-downloads) (>= 7.5), and [ACML](http://developer.amd.com/tools-and-sdks/archive/acml-downloads-resources/) (>= 5.3)
+For this parallel framework, you need CMake (>= 2.8), GCC (>= 4.x), MPICH (= 3.x), OpenCV (= 2.x), [CUDA](https://developer.nvidia.com/cuda-downloads) (>= 7.5), and [ACML](http://developer.amd.com/tools-and-sdks/archive/acml-downloads-resources/) (>= 5.3).
 
-CMake will detect all the libraries provided they are installed at their default paths. If that's not the case, you can use some of these CMake switches:
+CMake will detect all the libraries provided they are installed at their default paths. If not, you can use some of these CMake switches:
 
-- ACML_INSTALL_DIR
+- ACML_INSTALL_DIR : ```cmake -DACML_INSTALL_DIR=$HOME/tech/acml5.3.1/gfortran64```
+- MPI_INSTALL_DIR : ```cmake -DMPI_INSTALL_DIR=$HOME/tech/mpi```
+- OPENCV_INSTALL_DIR : ```cmake -DOPENCV_INSTALL_DIR=$HOME/tech/opencv```
+- CUDA_ARCH : ```cmake -DCUDA_ARCH=sm_35```
 
-```bash
-cmake -DACML_INSTALL_DIR=$HOME/tech/acml5.3.1/gfortran64
-```
-
-- MPI_INSTALL_DIR
-
-```bash
-cmake -DMPI_INSTALL_DIR=$HOME/tech/mpi
-```
-
-- OPENCV_INSTALL_DIR
-
-```bash
-cmake -DOPENCV_INSTALL_DIR=$HOME/tech/opencv
-```
-
-- CUDA_ARCH
-
-```bash
-cmake -DCUDA_ARCH=sm_35
-```
-
-To compile, run:
-
-```bash
-cmake .
-make -j20   # spawns 20 parallel jobs
-```
+Run ```cmake .``` and ```make -j20``` (spawns 20 parallel jobs) to compile the source files.
 
 ## Execution
 
-```bash
-mpirun -n 4 ./bin/ucm-mpi ./labeledData/rio1.jpg 3 600 600 0.07 0.08 0.10
-```
+To run this framework, use ```mpirun -n 16 ./bin/ucm-mpi ./labeledData/example.jpg 3 16 1 0.07 6```. The description of the arguments is as follow:
 
-Let us go over the arguments:
+- **-n 16** : use 16 MPI processes, denoted as ```kMpiProcess```.
+- **./bin/ucm-mpi** : location of the executable file.
+- **./labeledData/example.jpg** : location of the input image, the filename of which is ```example.jpg```.
+- **3** : number of labeling categories in the set of expert-labeled points, denoted as ```kClasses```.
+- **16** : number of the smaller patches, over which *gPb* of OWT-UCM is computed, denoted as ```kSmallerPatch```.
+- **1** : number of the larger patches, over which the remaining steps of OWT-UCM and GLSVM are performed, denoted as ```kLargerPatch```.
+- **0.07** : the fine level threshold of the OWT-UCM superpixel segmentation, denoted as ```kSmallThreshold```.
+- **6** : seconds of the waiting time to wake up the sleeping MPI processes.
 
-- -n 4 : use 4 MPI processes. Note that the value of ```n``` has to be at least ```ceil(sqrt((<image_width> * <image_height>) / (largePatchSize * largePatchSize))) * ceil(sqrt((largePatchSize * largePatchSize) / (smallPatchSize * smallPatchSize)))```
-- ./bin/ucmmpi : location of the executable
-- ./labeledData/rio1.jpg : location of the input image
-- 3 : 3 class labels. For ```rio1.jpg```, these 3 class labels denote slum, urban, and forest.
-- 600 : size of the small patch, over which gPb is computed. Also referred to as ```smallPatchSize```
-- 600 : size of the large patch, over which UCM is computed. Also referred to as ```largePatchSize```
-- 0.07 : fine level threshold for the UCM
-- 0.08 : mid level threshold for the UCM
-- 0.10 : coarse level threshold for the UCM
+Note that both ```kSmallerPatch``` and ```kLargerPatch``` must be perfect square numbers. The relationship of these numbers is ```kLargerPatch``` ¡Ü ```kSmallerPatch``` = ```kMpiProcess```.
 
-## Labeled data
 
-Each input image is to have a labeled ground truth file and a texton codebook. Optionally, you can provide ```n``` other labeled files to evaluate the pixel-level classification error:
+## Prerequisite Data
 
-- Ground truth : A few pixels that are classified as class_1, class_2, etc. This is the input for the SVM that classifies the superpixels later on. The file has to be named ```<filename>_GT.txt```
-- texton codebook : A 13 x 32 OpenCV matrix, denoting the 32 13-dimensional textons as a result of k-means over the texton responses in MATLAB. The file has to be named ```<filename>_texton_codebook.yml```
-- class_n matrix : An OpenCV matrix of the same dimensions as the image, filled with 0s (pixel does not belong to class_n) and 1s (pixel belongs to class_n). The files have to be named ```<filename>_labels_map_class_<class_no>.yml```
+The input image must have an expert-labeled data file and a texton codebook file. Optionally, you can provide at most ```kClasses``` ground-truth map files, either of which has a matrix containing all the pixel labels of a specific category on the VHR image, so that you can evaluate the pixel-level misclassification error. Here are more details of the necessary input files:
+
+- **Image** : The large-scale VHR image needs to be densely labeled. The common image formats (*JPEG*, *PNG*, *TIF*) are supported, such as ```<filename>.jpg```.
+
+- **Expert-Labeled Points** : A text file consists of the rows in format of <```x,y,c```>, where ```x``` and ```y``` are the column and row coordinates of the expert-labeled points in the actual image, and ```c``` is the belonging terrain category. This file needs to be named as ```<filename>_GT.txt```.
+
+- **Texton Codebook** : A 13 ¡Á 32 OpenCV matrix contains 32 representational [texton](http://www.robots.ox.ac.uk/~vgg/research/texclass/filters.html)  responses in 13 dimensions based on the *Schmid* filter bank. It can be externally generated by OpenCV or MATLAB. This file needs to be named as ```<filename>_texton_codebook.yml```.
+
+- **Ground-truth Map** : An OpenCV matrix of the same dimensions as the actual image, filled with 0s (pixel does not belong to ```class_n```) and 1s (pixel belongs to ```class_n```). The files needs to be named as ```<filename>_labels_map_class_<class_n>.yml```.
+
+A set of example input files is provided in the ```labeledData``` folder. Note that you also need to create a target folder of ```<filename>_<kSmallerPatch>_<kLargePatch>``` under this path before running your case.
+
+## Output Results
+The framework can output the full OWT-UCM segmentation result to:
+- An image file of ```<filename>_<kSmallThreshold>_ucm.png``` plotting the edge contours
+- A data file of ```<filename>_<kSmallThreshold>_ucm.yml``` storing the contour strength
+
+Similarly, the GLSVM classification results are saved in:
+- An image file of ```<filename>_<kSmallThreshold>_classlabels.png``` plotting the regions in different gray-scale colors (for different terrain categories)
+- A data file of ```<filename>_<kSmallThreshold>_classlabels.yml``` storing the class labels
+
+The pixel-level misclassification error will be printed at the end of the terminal output.
