@@ -26,17 +26,17 @@ class SPFeatures {
    public:
     cv::Mat& imageRef;
     cv::Mat& labelMat;
-    cv::Mat& midLabelMat;
-    cv::Mat& coarseLabelMat;
+    ///cv::Mat& midLabelMat;
+    ///cv::Mat& coarseLabelMat;
     cv::Mat allDescrs;
     int binStepSize;
     int nBins;
-    int nBaseLabels, nMidLabels, nCoarseLabels;
+    int nBaseLabels;///, nMidLabels, nCoarseLabels;
     bool colorImageFlag;
     int nFeatures, nClasses;
     std::vector<std::vector<std::pair<int, int>>> baseLabelBuckets;
-    std::vector<std::vector<std::pair<int, int>>> midLabelBuckets;
-    std::vector<std::vector<std::pair<int, int>>> coarseLabelBuckets;
+    ///std::vector<std::vector<std::pair<int, int>>> midLabelBuckets;
+    ///std::vector<std::vector<std::pair<int, int>>> coarseLabelBuckets;
     cv::Mat grayScaleImage;
 
     int nAuxFeatures;
@@ -44,9 +44,8 @@ class SPFeatures {
 
     CvDTree* DT = NULL;
 
-    SPFeatures(int binStep, int _nBaseLabels, int _nMidLabels, int _nCoarseLabels, int _nClasses, bool _colorImageFlag,
-               cv::Mat& _imageRef, cv::Mat& labelMat, cv::Mat& _midLabelMat, cv::Mat& _coarseLabelMat,
-               std::string _pieceFilePath);
+    SPFeatures(int binStep, int _nBaseLabels, int _nClasses, bool _colorImageFlag,
+               cv::Mat& _imageRef, cv::Mat& labelMat, std::string _pieceFilePath);
     const cv::Mat& genAuxFeatures();
     void genIntensityHistograms();
     void genCornerDescrs(int blockSize = 2, int apertureSize = 3, double k = 0.04, int threshold = 60);

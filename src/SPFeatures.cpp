@@ -8,17 +8,14 @@
 using namespace std;
 
 /* constructor definition */
-SPFeatures::SPFeatures(int binStep, int _nBaseLabels, int _nMidLabels, int _nCoarseLabels, int _nClasses,
-                       bool _colorImageFlag, cv::Mat& _imageRef, cv::Mat& _labelMat, cv::Mat& _midLabelMat,
-                       cv::Mat& _coarseLabelMat, string _pieceFilePath)
-    : imageRef(_imageRef), labelMat(_labelMat), midLabelMat(_midLabelMat), coarseLabelMat(_coarseLabelMat) {
+SPFeatures::SPFeatures(int binStep, int _nBaseLabels, int _nClasses,
+                       bool _colorImageFlag, cv::Mat& _imageRef, cv::Mat& _labelMat, string _pieceFilePath)
+    : imageRef(_imageRef), labelMat(_labelMat) {
     /// TODO: Auto-generated constructor stub
     binStepSize = binStep;
     nBins = 255 / binStepSize + 1;
 
     nBaseLabels = _nBaseLabels;
-    nMidLabels = _nMidLabels;
-    nCoarseLabels = _nCoarseLabels;
 
     colorImageFlag = _colorImageFlag;
     nClasses = _nClasses;
@@ -36,8 +33,6 @@ SPFeatures::SPFeatures(int binStep, int _nBaseLabels, int _nMidLabels, int _nCoa
     allDescrs = cv::Mat::zeros(nBaseLabels, nFeatures, CV_64F);
 
     baseLabelBuckets.resize(nBaseLabels);
-    midLabelBuckets.resize(nMidLabels);
-    coarseLabelBuckets.resize(nCoarseLabels);
 
     nAuxFeatures = 5;
     auxFeatures = cv::Mat::zeros(nBaseLabels, nAuxFeatures, CV_32F);
@@ -54,6 +49,7 @@ SPFeatures::~SPFeatures() {
     delete[] DT;
 }
 
+/*
 const cv::Mat& SPFeatures::genAuxFeatures() {
     genLabelBucketsAtScaleK(midLabelBuckets, midLabelMat);
     genLabelBucketsAtScaleK(coarseLabelBuckets, coarseLabelMat);
@@ -88,6 +84,7 @@ const cv::Mat& SPFeatures::genAuxFeatures() {
 
     return auxFeatures;
 }
+*/
 
 void SPFeatures::genLabelBucketsAtScaleK(vector<vector<pair<int, int>>>& scaleKBuckets,
                                          cv::Mat& labelMatAtScaleK) {
@@ -113,11 +110,6 @@ void SPFeatures::genIntensityHistograms() {
             allDescrs.at<double>(i, j) /= baseLabelBuckets.at(i).size();
             allDescrs.at<double>(i, j) *= 10;
         }
-        /*
-        if (i == nBaseLabels - 1)
-       	    cout << baseLabelBuckets.at(i).size() << endl;
-        }
-        */
     }
 }
 
@@ -137,11 +129,8 @@ cv::Mat SPFeatures::makefilter(int sup, int sigma, int tau) {
     cv::Mat f(sup, sup, CV_64F);
     x.convertTo(x, CV_64F);
     y.convertTo(y, CV_64F);
-    // OpenCVFileWriter(x, "test_x.yml", "x");
-    // OpenCVFileWriter(y, "test_y.yml", "y");
     cv::pow(x.mul(x) + y.mul(y), 0.5, r);
-    // OpenCVFileWriter(r, "test_r.yml", "r");
-    // cout << "cos(PI) = " << cos(PI) << endl;
+
     double fsum = 0, fsum_abs = 0;
     stringstream sStream;
     for (int i = 0; i < sup; i++)
@@ -214,36 +203,16 @@ void SPFeatures::genTextonFeatures(int clusterCount) {
     ifstream ifile(textonMap_filename);
     cv::Mat textonMap(grayScaleImage.rows, grayScaleImage.cols, CV_32S);
     if (!ifile) {
-        // string texton_filename = pieceFilePath + "_texton.yml";
-        // ifstream ifile2(texton_filename);
-    vector<cv::Mat> texton_responses;
-        // if (!ifile2) {
-            // log_info("Writing texton responses to file: %s", texton_filename.c_str());
-            // cv::FileStorage fs(texton_filename, cv::FileStorage::WRITE);
-    cv::Mat response, kernel;
-    cv::Rect r(margin, margin, grayScaleImage.cols, grayScaleImage.rows);
-    imagePadded.convertTo(imagePadded, CV_32F);     /* save the space */
-    for (int i = 0; i < NF; i++) {
-        F[i].convertTo(kernel, CV_32F);
-        cv::filter2D(imagePadded, response, imagePadded.depth(), kernel);
-        texton_responses.push_back(response(r).clone());
-                // fs << "response_" + to_string(i) << texton_responses.back();
-    }
-            // fs.release();
-        // }
-        /*
-        else {
-            log_info("Reading texton responses from file: %s", texton_filename.c_str());
-            cv::FileStorage fs(texton_filename, cv::FileStorage::READ);
-            for (int i = 0; i < NF; i++) {
-                cv::Mat response;       /// FIXME: @Yupeng noted - must be inside!!!!!
-                fs["response_" + to_string(i)] >> response;
-                texton_responses.push_back(response);
-                // OpenCVFileWriter(response, string("test_texton_" + to_string(i) + ".yml"), "response");
-            }
-            fs.release();
+        vector<cv::Mat> texton_responses;
+        cv::Mat response, kernel;
+        cv::Rect r(margin, margin, grayScaleImage.cols, grayScaleImage.rows);
+        imagePadded.convertTo(imagePadded, CV_32F);     /* save the space */
+        for (int i = 0; i < NF; i++) {
+            F[i].convertTo(kernel, CV_32F);
+            cv::filter2D(imagePadded, response, imagePadded.depth(), kernel);
+            texton_responses.push_back(response(r).clone());
+            // fs << "response_" + to_string(i) << texton_responses.back();
         }
-        */
 
         string bigPieceFilePath =
             pieceFilePath.substr(0, pieceFilePath.substr(0, pieceFilePath.find_last_of("_")).find_last_of("_"));
@@ -257,7 +226,6 @@ void SPFeatures::genTextonFeatures(int clusterCount) {
         log_info("Assigning cluster centers to pixels...");
         /* cluster center assignment */
         cv::Mat pixel_texton(NF, 1, CV_32F);
-        // cout << "grayScaleImageSize = " << grayScaleImage.rows << ", " << grayScaleImage.cols << endl;
         clock_t mapTime = clock();
         float minDistance;
         int clusterNumber = -1;
@@ -266,19 +234,8 @@ void SPFeatures::genTextonFeatures(int clusterCount) {
                 minDistance = numeric_limits<float>::infinity();
                 for (int k = 0; k < NF; k++) {
                     pixel_texton.at<float>(k, 0) = texton_responses[k].at<float>(i, j);
-                    if (i == 0 && j == 0) {
-                        // log_debug("pixel_texton %d: %f", k, pixel_texton.at<float>(k, 0));
-                    }
                 }
                 for (int k = 0; k < clusterCount; k++) {
-                    /*
-                    if(i == 0 && j < 5) {
-                        cout << cv::norm(pixel_texton, texton_codebook.col(k), cv::NORM_L2) << "\t" << k << endl;
-                    }
-                    if(i == 0 && j == 0) {
-                        cout << "texton_codebook 1st = " << texton_codebook.at<float>(0, k) << endl;
-                    }
-                    */
                     if (cv::norm(pixel_texton, texton_codebook.col(k), cv::NORM_L2) < minDistance) {
                         clusterNumber = k;
                     }
@@ -293,8 +250,7 @@ void SPFeatures::genTextonFeatures(int clusterCount) {
         log_info("Time taken for cluster assignment: %f sec", (float) mapTime / CLOCKS_PER_SEC);
         /* modified by Yupeng - untio textonMap.release */
         OpenCVFileWriter(textonMap, pieceFilePath + "_textonMap.yml", "textonMap");
-    }
-    else {
+    } else {
         log_info("Reading the texton map from file: %s", textonMap_filename.c_str());
         cv::FileStorage fs(textonMap_filename, cv::FileStorage::READ);
         fs["textonMap"] >> textonMap;
@@ -327,10 +283,7 @@ cv::Mat SPFeatures::genTextonMap(cv::Mat& textonImage, int clusterCount, bool is
     cv::Mat imagePadded;
     /// TODO: @Yupeng Test below line -- BORDER_REPLICATE
     cv::copyMakeBorder(textonImage, imagePadded, margin, margin, margin, margin, cv::BORDER_REFLECT);
-    /*
-    OpenCVFileWriter(textonImage, "test_paddedbefore.yml", "textonImage");
-    OpenCVFileWriter(imagePadded, "test_padded.yml", "imagePadded");
-    */
+
 
     /// FIXME: @Yupeng Compute gPb only if the file does not exist
     /* load the existing codebook from file */
@@ -340,12 +293,7 @@ cv::Mat SPFeatures::genTextonMap(cv::Mat& textonImage, int clusterCount, bool is
     ifstream ifile(textonMap_filename);
     cv::Mat textonMap(textonImage.rows, textonImage.cols, CV_32S);
     if (isBroadcasted || !ifile) {
-        // string texton_filename = pieceFilePath + "_texton.yml";
-        // ifstream ifile2(texton_filename);
         vector<cv::Mat> texton_responses;
-        // if (!ifile2) {
-            // log_info("Writing texton responses to file: %s", texton_filename.c_str());
-            // cv::FileStorage fs(texton_filename, cv::FileStorage::WRITE);
         cv::Mat response, kernel;
         cv::Rect r(margin, margin, textonImage.cols, textonImage.rows);
         imagePadded.convertTo(imagePadded, CV_32F);     /* save the space */
@@ -353,23 +301,8 @@ cv::Mat SPFeatures::genTextonMap(cv::Mat& textonImage, int clusterCount, bool is
             F[i].convertTo(kernel, CV_32F);
             cv::filter2D(imagePadded, response, imagePadded.depth(), kernel);
             texton_responses.push_back(response(r).clone());
-                // fs << "response_" + to_string(i) << texton_responses.back();
+            // fs << "response_" + to_string(i) << texton_responses.back();
         }
-            // fs.release();
-        // }
-        /*
-        else {
-            log_info("Reading texton responses from file: %s", texton_filename.c_str());
-            cv::FileStorage fs(texton_filename, cv::FileStorage::READ);
-            for (int i = 0; i < NF; i++) {
-                cv::Mat response;       /// FIXME: @Yupeng noted - must be inside!!!!!
-                fs["response_" + to_string(i)] >> response;
-                texton_responses.push_back(response);
-                // OpenCVFileWriter(response, string("test_texton_" + to_string(i) + ".yml"), "response");
-            }
-            fs.release();
-        }
-        */
 
         string bigPieceFilePath =
             pieceFilePath.substr(0, pieceFilePath.substr(0, pieceFilePath.find_last_of("_")).find_last_of("_"));
@@ -387,7 +320,6 @@ cv::Mat SPFeatures::genTextonMap(cv::Mat& textonImage, int clusterCount, bool is
         }
         /* cluster center assignment */
         cv::Mat pixel_texton(NF, 1, CV_32F);
-        // cout << "textonImageSize = " << textonImage.rows << ", " << textonImage.cols << endl;
         clock_t mapTime = clock();
         float minDistance;
         int clusterNumber = -1;
@@ -401,14 +333,6 @@ cv::Mat SPFeatures::genTextonMap(cv::Mat& textonImage, int clusterCount, bool is
                     }
                 }
                 for (int k = 0; k < clusterCount; k++) {
-                    /*
-                    if(i == 0 && j < 5) {
-                        cout << cv::norm(pixel_texton, texton_codebook.col(k), cv::NORM_L2) << "\t" << k << endl;
-                    }
-                    if(i == 0 && j == 0) {
-                        cout << "texton_codebook 1st = " << texton_codebook.at<float>(0, k) << endl;
-                    }
-                    */
                     if (cv::norm(pixel_texton, texton_codebook.col(k), cv::NORM_L2) < minDistance) {
                         clusterNumber = k;
                     }
@@ -522,9 +446,6 @@ void SPFeatures::DTFeatures(const vector<int>& gtSuperpixels, const vector<int>&
         }
     }
 
-    /// FIXME: @Yupeng comment
-    // OpenCVFileWriter(binFeatures, "./labeledData/binFeatures.yml", "binF");
-
     cv::hconcat(binFeatures, allDescrs, allDescrs);
     nFeatures += nClasses;
 }
@@ -566,15 +487,7 @@ void SPFeatures::genRecPatchFeatures(vector<pair<int, int>>* centerCoords, cv::M
         /// TODO @Yupeng - assume textonMap already generated, read directly
         cv::Mat textonMap, textonDescrs = cv::Mat::zeros(centerCoords->size(), clusterCount, CV_64F);
         textonMap = genTextonMap(grayScaleImage, clusterCount);
-        ////cout << "clusterCount = " << clusterCount << endl;
-        //// OpenCVFileWriter(textonMap, pieceFilePath + "_textonMapTest.yml", "textonMapTest");
-        // string textonMap_filename = pieceFilePath + "_textonMap.yml";
-        // log_info("Reading the texton map from file: %s", textonMap_filename.c_str());
-        // cout << "Coord size = " << centerCoords->size() << "\trecDescrs size = " << recDescrs.rows <<", " <<
-        // recDescrs.cols << endl;
-        // cv::FileStorage fs(textonMap_filename, cv::FileStorage::READ);
-        // fs["textonMap"] >> textonMap;
-        // fs.release();
+
         int patchSize = 64;
         for (int i = 0; i < centerCoords->size(); i++) {
             /* create patch */
@@ -583,42 +496,11 @@ void SPFeatures::genRecPatchFeatures(vector<pair<int, int>>* centerCoords, cv::M
             int south = min(patchSize / 2, grayScaleImage.rows - 1 - (*centerCoords)[i].first);
             int west = min(patchSize / 2, (*centerCoords)[i].second);
             int east = min(patchSize / 2, grayScaleImage.cols - 1 - (*centerCoords)[i].second);
-            /*
-            if (pieceFilePath.find("_0_0") != string::npos) {
-                prototype rect(x, y, width, height)
-                if (i == 539) {
-                    cout << "i = " << i << "\tN = " << north << "\tS = " << south << "\tW" << west << "\tE" << east;
-                }
-                cout << pieceFilePath << "\t";
-                cout << "i = " << i << "/" << centerCoords->size() << "\t";
-                cout << "start.x = " << (*centerCoords)[i].second - west << "\t";
-                cout << "start.y = " << (*centerCoords)[i].first - north << "\t";
-                cout << "width = " << west + east + 1 << "\t";
-                cout << "height = " << north + south + 1 << "\t";
-                cout << "center.x = " << (*centerCoords)[i].second << "\t";
-                cout << "center.y = " << (*centerCoords)[i].first << "\t";
-                cout << "north = " << north << "\t";
-                cout << "south = " << south << "\t";
-                cout << "west = " << west << "\t";
-                cout << "east = " << east << "\t";
-                cout << "gray.cols = " << grayScaleImage.cols << "\t";
-                cout << "gray.rows = " << grayScaleImage.rows << "\t";
-                cout << endl;
-            }
-            */
 
-            // cout << "Before Rect r??" << "\t";
             cv::Rect r((*centerCoords)[i].second - west, (*centerCoords)[i].first - north, west + east + 1,
                        north + south + 1);
             imageRef(r).copyTo(rgbPatch);
-            // cout << "After imageRef copyTo??" << "\t";
             grayScaleImage(r).copyTo(grayPatch);
-            /*
-            cout << "After gray copyTo??" << "\t";
-            if(i == 539) {
-                cout << "\tExtracting" << endl;
-            }
-            */
 
             /* (1) Intensity Histogram + (2) Corner Density + (3) Average RGB + (4) Texton Codes */
             for (int j = 0; j < grayPatch.rows; j++) {
@@ -626,11 +508,6 @@ void SPFeatures::genRecPatchFeatures(vector<pair<int, int>>* centerCoords, cv::M
                     /* row and col in original image space */
                     int row = (*centerCoords)[i].first - north + j;
                     int col = (*centerCoords)[i].second - west + k;
-                    /*
-                    if(i == 539) {
-                        cout << "j = " << j << "\tk = " << k << "\trow = " << row << "\tcol = " << col << endl;
-                    }
-                    */
                     /* 1st Feature */
                     int bin = grayPatch.at<uchar>(j, k) / binStepSize;
                     recDescrs.at<double>(i, bin) += 1;
@@ -644,13 +521,7 @@ void SPFeatures::genRecPatchFeatures(vector<pair<int, int>>* centerCoords, cv::M
                 }
             }
             int area = grayPatch.rows * grayPatch.cols;
-            ///cout << "i = " << i << ", area = " << area << endl;
-            /*
-            if(i == 538) {
-                cout << "Stop at area??\tarea = " << area << "\tallDescrs Size = " << allDescrs.rows << "\t" <<
-                    allDescrs.cols << endl;
-            }
-            */
+
             for (int j = 0; j < nBins; j++) {
                 recDescrs.at<double>(i, j) /= area;
                 recDescrs.at<double>(i, j) *= 10;
@@ -665,12 +536,6 @@ void SPFeatures::genRecPatchFeatures(vector<pair<int, int>>* centerCoords, cv::M
                 textonDescrs.at<double>(i, j) /= area;
                 textonDescrs.at<double>(i, j) *= 10;    /* texton feature weight */
             }
-            // DT Feature is added after concatenation in main.cpp
-            /*
-            if(i == 538) {
-                cout << "Pass the end?" << endl;
-            }
-            */
         }
         OpenCVFileWriter(recDescrs, pieceFilePath + "_recDescrs.yml", "recDescrs");
         OpenCVFileWriter(textonDescrs, pieceFilePath + "_textonDescrs.yml", "textonDescrs");
@@ -700,12 +565,6 @@ void SPFeatures::genSpCenterFeatures() {
         meanCoord.first = floor(meanCoord.first);
         meanCoord.second = floor(meanCoord.second);
         baseMeanCoords.push_back(meanCoord);
-        /*
-        if(i == 538 || i == 539) {
-            cout << "i = " << i << "\tfirst = " << baseMeanCoords.back().first << "\tsecond = " <<
-        }
-        baseMeanCoords.back().second << endl;
-        */
     }
 
     genRecPatchFeatures(&baseMeanCoords, allDescrs);
@@ -783,11 +642,6 @@ void SPFeatures::genSeedCenterFeatures(std::vector<cv::String>* filenames, vecto
         std::string filename = filenames->at(i);
         int start = filename.find("Class_") + (int)std::strlen("Class_");
         std::string c = filename.substr(start, filename.find("_Seed") - start);
-        /*
-        cout << "GT Image Filename = " << filename << endl;
-        cout << "A = " << filename.find("Class_") << ", B = " << (int)std::strlen("Class_") << ", C = " << filename.find("_Seed") << endl;
-        cout << "c = " << c << ", " << std::stoi(c) << endl;
-        */
         gtClassLabels.push_back(std::stoi(c));
         cv::Mat gtImage = cv::imread(filename);
         genRecPatchFeatures(gtImage, trainDescrs, textonDescrs, i);

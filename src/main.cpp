@@ -37,8 +37,6 @@ struct para {
     int bigOverlap;
     /* UCM */
     double scaleK;
-    double midScaleK;
-    double coarseScaleK;
     /* GLSVM */
     int binStep;
     double tau;
@@ -54,8 +52,8 @@ struct para {
 
 int main(int argc, char** argv) {
     MPI_Init(&argc, &argv);
-    if (argc != 10) {    // modified by Yupeng, 01/21
-        log_fatal("Incorrent number of arguments detected, please pass 9 arguments");
+    if (argc != 7) {    // modified by Yupeng, 01/21
+        log_fatal("Only detect %d arguments, please pass 7 arguments", argc);
         return -1;
     }
 
@@ -67,12 +65,10 @@ int main(int argc, char** argv) {
 
     MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    // cout << "num of processes is " << nprocs << endl;
 
     /* read the very big image */
     String biggestImgFN = argv[1];
     /* modified by Yupeng */
-    //String bigPieceFilePath = biggestImgFN.substr(0, biggestImgFN.find_last_of("."));
     int bigRsz;
 
     struct para option;
@@ -80,8 +76,6 @@ int main(int argc, char** argv) {
     option.nOrient = 8;
     option.bigOverlap = 0;
     option.scaleK = atof(argv[5]);
-    option.midScaleK = atof(argv[6]);
-    option.coarseScaleK = atof(argv[7]);
     option.binStep = 4;
     option.tau = 1;
     option.lambdaS = 0;
@@ -94,7 +88,7 @@ int main(int argc, char** argv) {
     option.nBigPieces = atoi(argv[4]);
     option.mode = "P";
     option.seed = "P";
-    option.broadcast = (atoi(argv[9]) == 1); // modified by Yupeng, 04/23
+    option.broadcast = false; ///(atoi(argv[9]) == 1); // modified by Yupeng, 04/23
 
     /* modified by Yupeng */
     String bigPieceFilePath = biggestImgFN.substr(0, biggestImgFN.find_last_of("."));
@@ -106,11 +100,6 @@ int main(int argc, char** argv) {
      * Currently overlap between small pieces
      * to compute gPb is set to zero.
      */
-    /*
-    int overlap = 0; //25;
-    int nOrient = 8;
-    float k = 0.4;
-    */
 
     cv::Mat biggestImg;
     cv::Mat bigImg;
@@ -126,15 +115,6 @@ int main(int argc, char** argv) {
         log_info("Number of processes: %d", nprocs);
         log_info("fileTemp: %s", fileTemp.c_str()); /* modified by Yupeng */
         log_info("bigPieceFilePath: %s", bigPieceFilePath.c_str()); /* modified by Yupeng */
-        /*
-        log_debug("CHAR_BIT: %u", CHAR_BIT);
-        log_debug("UCHAR_MAX: %u", UCHAR_MAX);
-        log_debug("SCHAR_MAX: %u", SCHAR_MAX);
-        log_debug("INT_MAX: %u", INT_MAX);
-        log_debug("LONG_MAX: %u", LONG_MAX);
-        log_debug("%u\t%u\t%u\t%u\t%u\t%u\t%u", sizeof(ushort), sizeof(short), sizeof(int), sizeof(uchar),
-                  sizeof(int32_t), sizeof(float), sizeof(double));
-        */
 
         biggestImg = imread(biggestImgFN);
         Size bigOrigSize = biggestImg.size();
@@ -147,12 +127,6 @@ int main(int argc, char** argv) {
         // modified by Yupeng, 04/23
         getTrainingPatches(bigPieceFilePath, biggestImg, rows, cols);
 
-        /*
-         * bigRsz is the number of bigger divisions.
-         * Only done at root since root reads the full size image
-         * (full size image is referred to as Biggest)
-         * bigRsz is later Broadcasted to all nodes.
-         */
         patches = Img2Pieces(bigPieceFilePath, biggestImg, option.bigOverlap, option.nBigPieces);
         bigRsz = (int) sqrt(patches.size());
         assert(bigRsz * bigRsz == option.nBigPieces);    // added by Yupeng, 01/21
@@ -185,12 +159,6 @@ int main(int argc, char** argv) {
      * eigenvector computation (gPb computation)
      */
     int* rsz = new int[nprocs];
-    /*
-    if (rank == 0) {
-        rsz = new int [bigRsz*bigRsz];
-        rsz = new int [nprocs];
-    }
-    */
 
     int sub_rsz = 0;
     int nBigIm = bigRsz * bigRsz;
@@ -212,12 +180,6 @@ int main(int argc, char** argv) {
         int big_sx = fmod(rank, bigRsz);
         String bigImgFileName = bigPieceFilePath + "_" + to_string(big_sy) + "_" + to_string(big_sx) + ".png";
         string pieceFilePath = bigPieceFilePath + "_" + to_string(big_sy) + "_" + to_string(big_sx);
-
-        /*
-        int pieceSize = 250000;
-        int overlap = 25;
-        int nOrient = 8;
-        */
 
         // Mat bigImg = imread(bigImgFileName);
         Size bigPartSize = bigImg.size();
@@ -275,18 +237,6 @@ int main(int argc, char** argv) {
             cum_rsz[i] = cum_rsz[i - 1] + pow(rsz[i - 1], 2);
         }
 
-        /*
-        for (int i = 0; i < nBigIm; i++) {
-            log_debug("rsz[i]: %d", rsz[i]);
-        }
-        for (int i = 0; i < nVals; i++) {
-            log_debug("cum_rsz[i]: %d", cum_rsz[i]);
-        }
-        for (int i = 0; i < nBigIm; i++) {
-            log_debug("rows[i]: %d, cols[i]: %d", rows[i], cols[i]);
-        }
-        */
-
         time(&now6);
         double seconds2 = difftime(now6, now5);
         // log_debug("rsz table %d took %ld sec", rank, seconds2);
@@ -321,19 +271,6 @@ int main(int argc, char** argv) {
 
         String outFile = bigPieceFilePath + "_" + to_string(bigsy) + "_" + to_string(bigsx) + "_" +
                          to_string(sy) + "_" + to_string(sx);
-        // String imgFile = outFile + ".png";
-        // log_debug("Image patch saved: %s", imgFile.c_str());
-
-        /// TODO: @Yupeng - compute gPb only if the file does not exist
-        // String gPbFilename = outFile + "_gPb.yml";
-
-        // ifstream ifile(gPbFilename);
-        // if (!ifile) {
-            // log_info("Writing the gPb matrices to file: %s", gPbFilename.c_str());
-            // GlobalPb(imgFile, outFile, gPb);
-            // GlobalPbWithNmax(imgFile, outFile, gPb);
-        //gPbOrient.reserve(option.nOrient);
-        //gPbNonmax = cv::Mat(currentImage.size(), CV_64FC1);
 
         int cudaDeviceCount = getCudaDeviceCount();
         int targetDevice = rank % cudaDeviceCount;
@@ -430,8 +367,7 @@ int main(int argc, char** argv) {
     vector<cv::Mat> classLabelMatVector(bigRsz * bigRsz);
     vector<cv::Mat> ucmDataVector(bigRsz * bigRsz);
     vector<cv::Mat> fineBdryVector(bigRsz * bigRsz);
-    vector<cv::Mat> midBdryVector(bigRsz * bigRsz);
-    vector<cv::Mat> coarseBdryVector(bigRsz * bigRsz);
+ 
     /*
      * The code below works within the new communicator which is grid_comm
      * Note that gridRank < nBigIm
@@ -440,7 +376,7 @@ int main(int argc, char** argv) {
 
     // MPI_DEBUG: Yupeng added
     if (grid_comm == MPI_COMM_NULL) {
-        int MAX_SLEEP_CYCLES = atof(argv[8]), sleep_cycles = 0;
+        int MAX_SLEEP_CYCLES = atof(argv[6]), sleep_cycles = 0;
         int wakeup_flag;
         MPI_Status status_curr;
         while (sleep_cycles < MAX_SLEEP_CYCLES) {
@@ -497,10 +433,6 @@ int main(int argc, char** argv) {
 
         cv::Mat gPbNonmaxMerged(gPbOrientMerged[0].rows, gPbOrientMerged[0].cols, CV_64FC1);
 
-        // String gPbOrientFilename = pieceFilePath + "_gPb_orient.yml";
-        // String gPbNmaxFilename = pieceFilePath + "_gPb_orient_nmax.yml";
-        // ifstream ifile(gPbOrientFilename);
-
         Mat temp;
         double pbMin, pbMax, alpha, beta;
 
@@ -518,58 +450,8 @@ int main(int argc, char** argv) {
             // modified by Yupeng, 01/21
             // OpenCVFileWriter(gPbOrientMerged[o], pieceFilePath + "_gpb_orient_" + to_string(o) + ".yml", "gpb_orient_" + to_string(o));
         }
-            // OpenCVFileWriter(gPbOrientMerged.at(0), pieceFilePath + "gPb_0.yml", "gPb_0");
-            // log_info("Writing the gPbOrient matrices to file: %s", gPbOrientFilename.c_str());
-            // cv::FileStorage fs(gPbOrientFilename, cv::FileStorage::WRITE);
-            // for (int i = 0; i < 8; i++) {
-            // fs << "gPb_orient_" + to_string(i) << gPbOrientMerged.at(i);
-            // minMaxLoc(gPbOrientMerged.at(i), &pbMin, &pbMax);
-            // alpha = (255 - 0) / (pbMax - pbMin);
-            // beta = -(255 - 0) * pbMin / (pbMax - pbMin);
-            // gPbOrientMerged.at(i).convertTo(temp, CV_8UC1, alpha, beta);
-            // imwrite(pieceFilePath + "_gPb_orient_" + to_string(i) + ".png", temp);
-            // }
-            // fs.release();
 
-            // log_info("Writing the gPbNmax matrices to file: %s", gPbNmaxFilename.c_str());
-            // cv::FileStorage nmax_fs(gPbNmaxFilename, cv::FileStorage::WRITE);
-            // nmax_fs << "gPb_nmax" << gPbNonmaxMerged;
-            // minMaxLoc(gPbNonmaxMerged, &pbMin, &pbMax);
-            // alpha = (255 - 0) / (pbMax - pbMin);
-            // beta = -(255 - 0) * pbMin / (pbMax - pbMin);
-            // gPbNonmaxMerged.convertTo(temp, CV_8UC1, alpha, beta);
-            // imwrite(pieceFilePath + "_gPb_orient_nmax.png", temp);
-            // nmax_fs.release();
-         // } else {
-            // log_info("Reading the gPb_orient matrices from file: %s", gPbOrientFilename.c_str());
-            // cv::FileStorage fs(gPbOrientFilename, cv::FileStorage::READ);
-            // for (int i = 0; i < option.nOrient; i++) {
-                // fs["gPb_orient_" + to_string(i)] >> gPbOrientMerged.at(i);
-                // minMaxLoc(gPbOrientMerged.at(i), &pbMin, &pbMax);
-                // alpha = (255 - 0) / (pbMax - pbMin);
-                // beta = -(255 - 0) * pbMin / (pbMax - pbMin);
-                // gPbOrientMerged.at(i).convertTo(temp, CV_8UC1, alpha, beta);
-                // imwrite("gPb_orient_" + to_string(i) + ".png", temp);
-            // }
-            // fs.release();
-        //}
         MPI_Barrier(grid_comm);
-
-        /* save gPbNonmaxMerged */
-        /*
-         * if(true) {
-         *     log_debug("Writing the gPb_nmax to file...");
-         *     cv::Mat gPbNonmaxMerged = cv::Mat::zeros(gPbOrientMerged[0].rows, gPbOrientMerged[0].cols, CV_64F);
-         *     for(int i = 0; i < option.nOrient; i++)
-         *         for(int j = 0; j < gPbOrientMerged[0].rows; j++)
-         *             for(int k = 0; k < gPbOrientMerged[0].cols; k++)
-         *                 gPbNonmaxMerged.at<double>(j, k) = max(gPbNonmaxMerged.at<double>(j, k),
-         *                                                 fabs(gPbOrientMerged[i].at<double>(j, k)));
-         *     cv::FileStorage fs(pieceFilePath + "_gPb_orient_nmax.yml", cv::FileStorage::WRITE);
-         *     fs << "gPb_nmax" << gPbNonmaxMerged;
-         *     fs.release();
-         * }
-         */
 
         UCM_generator ucm_data(rows[gridRank], cols[gridRank], pieceFilePath);
         String fmt = "doubleSize";
@@ -589,39 +471,6 @@ int main(int argc, char** argv) {
         OpenCVImageWriter(ucm_data.ucm, pieceFilePath + "_ucm.png");
         log_info("UCM piece data has been written by gridRank (%d)", gridRank);
 
-        /*
-        // Compute histogram for the UCM data matrix to decide on fine, mid and coarse scale values
-        // All the bins are contained in [minUcm, maxUcm] instead of binning over all possible values
-        // To account for the dynamic range of UCM values
-        double minUcm, maxUcm;
-        // Same as the count used by Yupeng
-        int numBins = 52;
-        minMaxLoc(ucm_data.ucm, &minUcm, &maxUcm);
-        float binSize = (maxUcm - minUcm) / numBins;
-        vector<double> ucmCumulativeDist(numBins, 0);
-        // Bin values acc to pixel with value p belongs to bin index floor((p - minUcm) / binSize)
-        for(int i = 0; i < ucm_data.ucm.rows; ++i) {
-            for(int j = 0; j < ucm_data.ucm.cols; ++j) {
-                int binIdx = floor((ucm_data.ucm.at<double>(i, j) - minUcm) / binSize);
-                ucmCumulativeDist[binIdx] += 1;
-            }
-        }
-        // Generate cumulative distribution for percentile calculations
-        for(int i = 1; i < ucmCumulativeDist.size(); ++i) {
-            ucmCumulativeDist[i] += ucmCumulativeDist[i - 1];
-        }
-        for(double& u : ucmCumulativeDist) {
-            u /= ucm_data.ucm.rows * ucm_data.ucm.cols;
-        }
-        stringstream ss;
-        ss << "[" << ucmCumulativeDist[0];
-        for(int i = 1; i < ucmCumulativeDist.size(); ++i) {
-            ss << "," << ucmCumulativeDist[i];
-        }
-        ss << "]";
-        log_debug("Histogram computed: %s", ss.str().c_str());
-        */
-        // double scaleK = 0.05;    // 0.17
         ucm_data.generateBdryAtScaleK(option.scaleK, 1);
         int nBaseLabels = ucm_data.generateLabelsAtScaleK(option.scaleK, 1);
 
@@ -636,35 +485,6 @@ int main(int argc, char** argv) {
         OpenCVImageWriter(finerBdry, imageNameBdry);
 
         /* ==================== Mid and Coarse scales ====================== */
-        // double midScaleK = 0.06;
-        ucm_data.generateBdryAtScaleK(option.midScaleK, 2);
-        int nMidLabels = ucm_data.generateLabelsAtScaleK(option.midScaleK, 2);
-        cv::Mat& midLocalLabels = ucm_data.midLabels;
-
-        log_info("nMidLabels: %d", nMidLabels);
-        // OpenCVFileWriter(ucm_data.midLabels, pieceFilePath + "_labelsMiddle.yml", "midLabels");
-
-        /* show the boundary */
-        cv::Mat midBdry = cv::Mat::zeros(rows[gridRank], cols[gridRank], CV_8U);
-        midBdry.setTo(cv::Scalar(255), ucm_data.ucm > option.midScaleK);
-        imageNameBdry = pieceFilePath + "_bdryMid.png";
-        OpenCVImageWriter(midBdry, imageNameBdry);
-        // OpenCVFileWriter(midBdry, pieceFilePath + "midBdry.yml", "midBdry");
-
-        // double coarseScaleK = 0.08;
-        ucm_data.generateBdryAtScaleK(option.coarseScaleK, 3);
-        int nCoarseLabels = ucm_data.generateLabelsAtScaleK(option.coarseScaleK, 3);
-        cv::Mat& coarseLocalLabels = ucm_data.coarseLabels;
-
-        log_info("nCoarseLabels: %d", nCoarseLabels);
-        // OpenCVFileWriter(ucm_data.coarseLabels, pieceFilePath + "_labelsCoarse.yml", "coarseLabels");
-
-        /* show the boundary */
-        cv::Mat coarseBdry = cv::Mat::zeros(rows[gridRank], cols[gridRank], CV_8U);
-        coarseBdry.setTo(cv::Scalar(255), ucm_data.ucm > option.coarseScaleK);
-        imageNameBdry = pieceFilePath + "_bdryCoarse.png";
-        OpenCVImageWriter(coarseBdry, imageNameBdry);
-        // OpenCVFileWriter(coarseBdry, pieceFilePath + "coarseBdry.yml", "coarseBdry");
 
         /* ================================================================= */
 
@@ -681,26 +501,15 @@ int main(int argc, char** argv) {
         cv::Mat& localLabels = ucm_data.labels;     /* Note: localLabels mean baseLabels */
         vector<pair<int, int>>& bdry = ucm_data.bdry;
 
-        SPFeatures DES(option.binStep, nBaseLabels, nMidLabels, nCoarseLabels, option.nClasses, colorImageFlag,
-                        bigImg, localLabels, midLocalLabels, coarseLocalLabels, pieceFilePath);
+        SPFeatures DES(option.binStep, nBaseLabels, option.nClasses, colorImageFlag,
+                        bigImg, localLabels, pieceFilePath);    /// remove mid and coarse labels
         if (option.mode == "P") {
             DES.genSpCenterFeatures();
         } else {
             DES.genSuperpixelFeatures();
         }
-        log_debug("Before genAuxFeatures");
 
-        // OpenCVFileWriter(DES.allDescrs.col(nFeat-1-4), pieceFilePath + "_F.xml", "ALLFeatures");
-        // OpenCVFileWriter(DES.allDescrs, pieceFilePath + "_F.yml", "AllFeatures");
-        // OpenCVFileWriter(DES.allDescrs.row(0), pieceFilePath + "_F.xml", "ALLFeatures");
-        // cout << "nBaseLabels & DES.rows = " << nBaseLabels << " " << DES.allDescrs.rows << endl;
-
-        /* ==================== AUX Features =============================== */
-        const cv::Mat& auxFeatures = DES.genAuxFeatures();
-        // OpenCVFileWriter(auxFeatures, pieceFilePath + "_AF.yml", "AUXFeatures");
-        /* ================================================================= */
-
-        log_debug("After genAuxFeatures");
+        ///log_debug("After genAuxFeatures");
         time(&now4);
 
         double seconds1 = difftime(now4, now3);
@@ -898,7 +707,6 @@ int main(int argc, char** argv) {
         } else {
             vector<cv::String> fn;
             std::string gtpath = bigPieceFilePath.substr(0, bigPieceFilePath.find_last_of("/") + 1) + "gtImages/";
-            cout << "gtpath = " << gtpath << endl;
             cv::glob(gtpath + "*.jpg", fn, false);
             trainDescrs = cv::Mat::zeros(static_cast<int>(fn.size()), DES.nFeatures - DES.clusterCount, CV_64F);
             if (option.mode == "P" && option.seed == "P") {
@@ -910,13 +718,6 @@ int main(int argc, char** argv) {
             nGTPoints = trainDescrs.rows;
             gtSuperpixels = vector<int>(nGTPoints, 1);
         }
-
-        /*
-        cout << "gtSuperpixels.size = " << gtSuperpixels.size() << endl;
-        cout << "gtClassLabels.size = " << gtClassLabels.size() << endl;
-        cout << "trainDescrs.rows = " << trainDescrs.rows << endl;
-        cout << "trainDescrs.cols = " << trainDescrs.cols << endl;
-        */
 
         int* gtSP_ptr = gtSuperpixels.data();
         int* gtCL_ptr = gtClassLabels.data();
@@ -997,7 +798,6 @@ int main(int argc, char** argv) {
         log_info("Send GT Features | labelOffset: %d", labelOffset);
         // OpenCVFileWriter(gtFeatures, pieceFilePath + "_gtF.yml", "gtFeatures");
 
-        //cout << "nGTPoints = " << nGTPoints << endl;
         assert(nGTPoints == gtFeatures.rows);
 
         // check if they are continuous
@@ -1045,38 +845,6 @@ int main(int argc, char** argv) {
         }
 
         /* ===================================================== */
-
-        /* pass adjacent features across topology grid */
-        /* set should give linear complexity than sorting the original array
-        set<int> uniqueTRow, uniqueBRow;
-        for (int i = 0; i < cols[gridRank]; i++) {
-            uniqueTRow.insert(tRowData[i]);
-            uniqueBRow.insert(bRowData[i]);
-        }
-        set<int> uniqueLCol, uniqueRCol;
-        for (int i = 0; i < rows[gridRank]; i++) {
-            uniqueLCol.insert(lColData[i]);
-            uniqueRCol.insert(rColData[i]);
-        }
-        /// TODO: @Yupeng - check if above are unique^^
-
-        cv::Mat uTopRowFeatures(0, DES.nBaseLabels, CV_64F);
-        for (auto it = uniqueTRow.begin(); it != uniqueTRow.end(); it++) {
-            uTopRowFeatures.push_back(DES.allDescrs.row(*it-labelOffset));
-        }
-        cv::Mat uBotRowFeatures(0, DES.nBaseLabels, CV_64F);
-        for (auto it = uniqueBRow.begin(); it != uniqueBRow.end(); it++) {
-            uBotRowFeatures.push_back(DES.allDescrs.row(*it-labelOffset));
-        }
-        cv::Mat uLeftColFeatures(0, DES.nBaseLabels, CV_64F);
-        for (auto it = uniqueLCol.begin(); it != uniqueLCol.end(); it++) {
-            uLeftColFeatures.push_back(DES.allDescrs.row(*it-labelOffset));
-        }
-        cv::Mat uRightColFeatures(0, DES.nBaseLabels, CV_64F);
-        for (auto it = uniqueRCol.begin(); it != uniqueRCol.end(); it++) {
-            uRightColFeatures.push_back(DES.allDescrs.row(*it-labelOffset));
-        }
-        */
 
         vector<int> uniqueTRow, uniqueBRow, uniqueLCol, uniqueRCol;
 
@@ -1347,12 +1115,6 @@ int main(int argc, char** argv) {
         /* ================================================================================= */
 
         /* ================= Now call the global function of the solver on root node only =========== */
-        /*
-        double lambdaS = 1.0;
-        double lambdaH = 1.0;
-        double epsZ = 0.001;
-        double convergenceThreshold = 0.00001;
-        */
         cv::Mat weightVectors;
         double* p_weightVectors;
         if (gridRank == 0) {
@@ -1413,12 +1175,6 @@ int main(int argc, char** argv) {
              */
         }
 
-        /// TODO: @Yupeng - check the score for each class
-        // OpenCVFileWriter(localClassLabelMat, pieceFilePath + "_scores.yml", "localClassLabelMat");
-        // OpenCVFileWriter(localClassLabelVec, pieceFilePath + "_scoreMax.yml", "localClassLabelVec");
-
-        // cv::reduce(localClassLabelMat, localClassLabels, 1, CV_REDUCE_MAX, -1);
-
         /* Organize the labels in the original image format */
         cv::Mat classLabelMat = cv::Mat::zeros(rows[gridRank], cols[gridRank], CV_32S);
         for (int i = 0; i < rows[gridRank]; i++) {
@@ -1463,47 +1219,6 @@ int main(int argc, char** argv) {
             MpiSendMat(finerBdry, 0);
         }
 
-        // Get mid level boundary data at root
-        if(rank == 0) {
-            midBdryVector[0] = midBdry;
-            for(int i = 1; i < midBdryVector.size(); ++i) {
-                midBdryVector[i] = MpiRecvMat(i);
-            }
-        }
-        else if(rank < nBigIm) {
-            // Send data to root process to combine
-            MpiSendMat(midBdry, 0);
-        }
-
-        // Get coarse boundary data at root
-        if(rank == 0) {
-            coarseBdryVector[0] = coarseBdry;
-            for(int i = 1; i < coarseBdryVector.size(); ++i) {
-                coarseBdryVector[i] = MpiRecvMat(i);
-            }
-        }
-        else if(rank < nBigIm) {
-            // Send data to root process to combine
-            MpiSendMat(coarseBdry, 0);
-        }
-        // OpenCVFileWriter(classLabelMat, pieceFilePath + "classlabels.xml", "classLabels");
-        // OpenCVFileWriter(classLabelMat, pieceFilePath + "_classlabels.yml", "classLabels");
-
-        /* write to image */
-        /*
-        double minXi, maxXi;
-        string imageName;
-        Mat destIm;
-        minMaxLoc(classLabelMat, &minXi, &maxXi);
-
-        imageName = pieceFilePath + "_classlabels.png";
-
-        alpha = 255.0 / (maxXi - minXi);
-        beta = -minXi * 255.0 / (maxXi - minXi);
-        classLabelMat.convertTo(destIm, CV_8U, alpha, beta);
-        imwrite(imageName, destIm);
-        */
-        // OpenCVImageWriter(classLabelMat, pieceFilePath + "_classlabels.png");
 
         // MPI_DEBUG: Yupeng added
         MPI_Barrier(grid_comm);
@@ -1538,15 +1253,7 @@ int main(int argc, char** argv) {
         cv::Mat coarseBdryMap(rows, cols, CV_64F);
 
         string mark;
-        /*
-        mark = "_" + option.mode + "_" + option.seed + "_";
-        mark += to_string((int)sqrt(option.nPieces)) + "_" +
-                to_string((int)sqrt(option.nBigPieces));
-        mark += "_" + to_string(bigRsz) + "_" + to_string(sub_rsz);
-        */
-        mark = to_string(option.scaleK) + "_" +
-            to_string(option.midScaleK) + "_" +
-            to_string(option.coarseScaleK);
+        mark = to_string(option.scaleK);
         // Merge ucm pieces into the big picture
         Pieces2Mat(bigPieceFilePath, mark, option.bigOverlap, option.nBigPieces, ucmMap, ucmDataVector);
 
@@ -1555,8 +1262,6 @@ int main(int argc, char** argv) {
 
         // Merge respective boundaries into a big picture
         Pieces2Mat(bigPieceFilePath, mark, option.bigOverlap, option.nBigPieces, fineBdryMap, fineBdryVector);
-        Pieces2Mat(bigPieceFilePath, mark, option.bigOverlap, option.nBigPieces, midBdryMap, midBdryVector);
-        Pieces2Mat(bigPieceFilePath, mark, option.bigOverlap, option.nBigPieces, coarseBdryMap, coarseBdryVector);
 
         vector<cv::Mat> labelsPerClass(option.nClasses);
         for(int i = 0; i < option.nClasses; ++i) {
@@ -1591,12 +1296,6 @@ int main(int argc, char** argv) {
         OpenCVImageWriter(fineBdryMap, bigPieceFilePath + "_" + mark + "_bdry_fine.png");
         OpenCVFileWriter(fineBdryMap, bigPieceFilePath + "_" + mark + "_bdry_fine.yml", "boundary_fine");
 
-        OpenCVImageWriter(midBdryMap, bigPieceFilePath + "_" + mark + "_bdry_mid.png");
-        OpenCVFileWriter(midBdryMap, bigPieceFilePath + "_" + mark + "_bdry_mid.yml", "boundary_mid");
-
-        OpenCVImageWriter(coarseBdryMap, bigPieceFilePath + "_" + mark + "_bdry_coarse.png");
-        OpenCVFileWriter(coarseBdryMap, bigPieceFilePath + "_" + mark + "_bdry_coarse.yml", "boundary_coarse");
-
         log_debug("Beginning to compute the classification accuracy...");
         int countPixels = 0;
         for (int i = 1; i <= option.nClasses; i++) {
@@ -1615,13 +1314,10 @@ int main(int argc, char** argv) {
             log_debug("labels_map | rows: %d, cols: %d", labels_map.rows, labels_map.cols);
             for (int r = 0; r < labels_map.rows; r++) {
                 for (int c = 0; c < labels_map.cols; c++) {
-                    // cout << "labelMap = " << labelMap.at<int>(r, c) << "\tlabels_map = " <<
-                    // labels_map.at<float>(r, c) << endl;
                     if ((labelMap.at<int>(r, c) == i) && (floor(labels_map.at<float>(r, c) + 0.5) == 1)) {
                         countPixels++;
                     }
                 }
-                // cout << "i = " << i << "\tr = " << r << endl;
             }
             fs.release();
         }
