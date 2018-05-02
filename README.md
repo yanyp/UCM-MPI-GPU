@@ -1,8 +1,8 @@
 # Parallelizable Dense Labeling Framework for Very-High-Resolution Satellite Images
 
-This is the implementation of the parallelizable semi-supervised dense labeling framework for Very-High-Resolution (VHR) Satellite Images. The main steps contain OWT-UCM superpixel segmentation and GLSVM semi-supervised classification as our [paper](https://www.cise.ufl.edu/~anand/pdf/IJBDI_anandlyx_webversion.pdf) describes. Only a limited number of expert-labeled points in terms of pixel coordinates are needed for the pixel-level labeling work on the whole image. A toy example of the parallel labeling pipeline is shown as below.
+This is the implementation of the parallelizable semi-supervised dense labeling framework for Very-High-Resolution (VHR) Satellite Images (see the figure below). The main steps contain OWT-UCM superpixel segmentation and GLSVM semi-supervised classification as our [paper](https://www.cise.ufl.edu/~anand/pdf/IJBDI_anandlyx_webversion.pdf) describes. Only a limited number of expert-labeled points in terms of pixel coordinates are needed for the pixel-level labeling work on the whole image.
 
-![Framework Example](https://https://github.com/yanyp/UCM-MPI-GPU/master/FrameworkExample.png "Framework Example")
+![Framework Example](https://github.com/yanyp/UCM-MPI-GPU/blob/master/FrameworkExample.png "Framework Example")
 
 The original [OWT-UCM](https://www2.eecs.berkeley.edu/Research/Projects/CS/vision/grouping/resources.html) algorithm is re-written in C++ and CUDA to support the parallelization operations. We refer to the UC Berkeley's image contour detection [paper](https://parlab.eecs.berkeley.edu/sites/all/parlab/files/iccv2009.pdf) and Bryan's [codes](https://github.com/bryancatanzaro/damascene) for the GPU acceleration. When NVIDIA GPUs are not available, we use the [Spectra](https://spectralib.org/) C++ library to solve the large-scale eigenvalue problem of the *sPb* computation. Note that our codes are still under revision based on Google C++ style [guide](https://google.github.io/styleguide/cppguide.html).
 
