@@ -19,16 +19,7 @@ void GlobalPb(String imgFile, String outFile, vector<cv::Mat>& gPb, double rsz) 
     Mat im = imread(imgFile);
     Mat imd;
     im.convertTo(imd, CV_64FC3, 1.0 / 255.0);   /// TODO: check
-    // cout<<im.at<int>
-    /*
-    imshow("double", imd);
-    imshow("original", im);
 
-    Mat imd1;
-    im.convertTo(imd1, CV_32FC3);
-    imshow("float", imd1);
-    waitKey(0);
-    */
     int nChan = imd.channels();     /// TODO: check
     Size origSize = imd.size();     /// TODO: check
 
@@ -45,10 +36,6 @@ void GlobalPb(String imgFile, String outFile, vector<cv::Mat>& gPb, double rsz) 
     }
 
     /// TODO: @Yupeng - fix below lines
-    /*
-      string yupeng_filename = "labeledData/mpb_essentials.yml";
-      ifstream infile(yupeng_filename);
-    */
     string mPbFilename = outFile + "_mPb.yml";
     ifstream infile(mPbFilename);
     time(&nowd2);
@@ -60,45 +47,12 @@ void GlobalPb(String imgFile, String outFile, vector<cv::Mat>& gPb, double rsz) 
         fs.release();
         mPbRsz = &(mPbRszMat);
         // detmpbObj.loadObject(outFile);
-    }
-    else {
-        /* set default feature weights
-        vector<double> weights(13);
-        if (nChan == 3) {
-            weights = {0, 0, 0.0039, 0.0050, 0.0058, 0.0069, 0.0040, 0.0044, 0.0049, 0.0024, 0.0027, 0.0170, 0.0074};
-        }
-        else {
-                weights = {0, 0, 0.0054, 0, 0, 0, 0, 0, 0, 0.0048, 0.0049, 0.0264, 0.0090};
-        }
-        */
-
+    } else {
         Mat* mPbNmax = NULL;
         /* rsz not included, should take default 1.0 */
         multiscalePb(mPbNmax, mPbRsz, detmpbObj, imd, origSize, nChan, outFile);
         // detmpbObj.SaveObject(outFile);
 
-        /* test code
-        double data1[9] = {0.9323, 0.4393, 0.6929, 0.4393, 0.4340, 0.4993, 0.6929, 0.4993, 0.9979};
-        mPbRsz = new Mat (3,3,CV_64F);
-        mPbRsz->data = (uchar*) data1;
-        for (int i  = 0; i < 9; i++) {
-            cout << ((double*)mPbRsz->data)[i] << ",";
-        }
-        cout << endl;
-        cout << "========Printing mPb ============" <<endl;
-        double* ptrData;
-        for (int i = 0; i < mPbRsz->rows; i++) {
-            ptrData = (double*) mPbRsz->ptr(i);
-            for (int j  = 0; j < mPbRsz->cols; j++) {
-                cout << ptrData[j] << ",";
-            }
-            cout << endl;
-        }
-        cout << "========Ended Printing mPb ============" <<endl;
-        */
-
-        /// TODO: @Yupeng - save the essential mat file
-        // cv::FileStorage fs(yupeng_filename, cv::FileStorage::WRITE);
         cv::FileStorage fs(mPbFilename, cv::FileStorage::WRITE);
         fs << "mPb_rsz_mat" << *mPbRsz;
         // fs << "detmpb_obj_pb" << detmpbObj;
@@ -303,14 +257,6 @@ void GlobalPbCuda(cv::Mat& imagePatch, string outFile, vector<cv::Mat>& gPbOrien
     /// FIXME: Possibly replace this with uint_least32_t to ensure minimum availablity
     ///        for this construct?
     unsigned int* patchData = new unsigned int[imagePatch.total()];
-    /*
-    string gPbOrientFname(outFile + "_gPb.yml");
-    string gPbNonmaxFname(outFile + "_gPb_nmax.yml");
-    string matrixName;
-
-    FileStorage gPbOrientYMLFile(gPbOrientFname, FileStorage::WRITE);
-    FileStorage gPbNonmaxYMLFile(gPbNonmaxFname, FileStorage::WRITE);
-    */
 
     float* hostGPb = NULL;
     float* hostGPbAllConcat = NULL;
@@ -352,17 +298,6 @@ void GlobalPbCuda(cv::Mat& imagePatch, string outFile, vector<cv::Mat>& gPbOrien
             }
         }
         gPbOrient.push_back(gPbPiece);
-        /*
-         * matrixName = "gPb_" + to_string(orient);
-         * gPbOrientYMLFile << matrixName << gPbPiece;
-         *
-         * string gpb_img_name = outFile + "_" + matrixName + "_orient.png";
-         * minMaxLoc(gPbPiece, &pb_min, &pb_max);
-         * alpha = (255 - 0) / (pb_max - pb_min);
-         * beta = -(255 - 0) * pb_min / (pb_max - pb_min);
-         * gPbPiece.convertTo(temp, CV_8UC1, alpha, beta);
-         * imwrite(gpb_img_name, temp);
-         */
     }
 
     /* Write host gpb to outfile */
@@ -372,18 +307,6 @@ void GlobalPbCuda(cv::Mat& imagePatch, string outFile, vector<cv::Mat>& gPbOrien
             gPbNonmax.at<double>(i, j) = hostGPb[i * cols + j];
         }
     }
-    /*
-     * minMaxLoc(gPbNonmax, &pb_min, &pb_max);
-     * alpha = (255 - 0) / (pb_max - pb_min);
-     * beta = -(255 - 0) * pb_min / (pb_max - pb_min);
-     * gPbNonmax.convertTo(temp, CV_8UC1, alpha, beta);
-     * imwrite(outFile + "_gpb_nmax.png", temp);
-     * matrixName = "gPb_nmax";
-     * gPbNonmaxYMLFile << matrixName << gPbNonmax;
-     */
-
-    // gPbOrientYMLFile.release();
-    // gPbNonmaxYMLFile.release();
     free(hostGPb);
     free(hostGPbAllConcat);
     delete[] patchData;
