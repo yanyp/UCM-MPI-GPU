@@ -8,7 +8,7 @@ The original [OWT-UCM](https://www2.eecs.berkeley.edu/Research/Projects/CS/visio
 
 ## Compilation
 
-For this parallel framework, you need CMake (>= 2.8), GCC (>= 4.x), MPICH (= 3.x), OpenCV (= 2.x), [CUDA](https://developer.nvidia.com/cuda-downloads) (>= 7.5), and [ACML](http://developer.amd.com/tools-and-sdks/archive/acml-downloads-resources/) (>= 5.3).
+For this parallel framework, you need CMake (&ge; 2.8), GCC (&ge; 4.x), MPICH (= 3.x), OpenCV (= 2.x), [CUDA](https://developer.nvidia.com/cuda-downloads) (&ge; 7.5), and [ACML](http://developer.amd.com/tools-and-sdks/archive/acml-downloads-resources/) (&ge; 5.3).
 
 CMake will detect all the libraries provided they are installed at their default paths. If not, you can use some of these CMake switches:
 
