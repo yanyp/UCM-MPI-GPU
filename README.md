@@ -29,7 +29,7 @@ To run this framework, use ```mpirun -n 16 ./bin/ucm-mpi ./labeledData/example.j
 - **3** : number of labeling categories in the set of expert-labeled points, denoted as ```kClasses```.
 - **16** : number of the smaller patches, over which *gPb* of OWT-UCM is computed, denoted as ```kSmallerPatch```.
 - **1** : number of the larger patches, over which the remaining steps of OWT-UCM and GLSVM are performed, denoted as ```kLargerPatch```.
-- **0.07** : the fine level threshold of the OWT-UCM superpixel segmentation, denoted as ```kSmallThreshold```.
+- **0.07** : the fine level threshold of the OWT-UCM superpixel segmentation, denoted as ```kScale```.
 - **6** : seconds of the waiting time to wake up the sleeping MPI processes.
 
 Note that both ```kSmallerPatch``` and ```kLargerPatch``` must be perfect square numbers. The relationship of these numbers is ```kLargerPatch``` &le; ```kSmallerPatch``` = ```kMpiProcess```.
@@ -51,11 +51,11 @@ A set of example input files is provided in the ```labeledData``` folder. Note t
 
 ## Output Results
 The framework can output the full OWT-UCM segmentation result to:
-- An image file of ```<filename>_<kSmallThreshold>_ucm.png``` plotting the edge contours
-- A data file of ```<filename>_<kSmallThreshold>_ucm.yml``` storing the contour strength
+- An image file of ```<filename>_<kScale>_ucm.png``` plotting the edge contours
+- A data file of ```<filename>_<kScale>_ucm.yml``` storing the contour strength
 
 Similarly, the GLSVM classification results are saved in:
-- An image file of ```<filename>_<kSmallThreshold>_classlabels.png``` plotting the regions in different gray-scale colors (for different terrain categories)
-- A data file of ```<filename>_<kSmallThreshold>_classlabels.yml``` storing the class labels
+- An image file of ```<filename>_<kScale>_classlabels.png``` plotting the regions in different gray-scale colors (for different terrain categories)
+- A data file of ```<filename>_<kScale>_classlabels.yml``` storing the class labels
 
 The pixel-level misclassification error will be printed at the end of the terminal output.
